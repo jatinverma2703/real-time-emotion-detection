@@ -8,3 +8,4 @@ librosa
 matplotlib
 scikit-learn
 requests
+sounddevice
