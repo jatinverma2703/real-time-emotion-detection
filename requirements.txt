@@ -1,11 +1,13 @@
 streamlit
+opencv-python
 tensorflow
 keras
-opencv-python
-pandas
 numpy
-librosa
+pandas
 matplotlib
+librosa
+soundfile
+pyaudio
 scikit-learn
+joblib
 requests
-sounddevice
