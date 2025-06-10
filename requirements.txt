@@ -1,11 +1,6 @@
-
 streamlit
 numpy
-pandas
-opencv-python-headless
-librosa
-matplotlib
-tensorflow
+opencv-python
 keras
-pyttsx3
-sounddevice
+tensorflow
+Pillow
