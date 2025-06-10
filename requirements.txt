@@ -2,9 +2,11 @@ streamlit
 tensorflow
 keras
 opencv-python
-pandas
 numpy
-librosa
+pandas
 matplotlib
+librosa
+soundfile
 scikit-learn
-requests
+pyaudio
+speechrecognition
