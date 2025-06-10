@@ -10,9 +10,15 @@ from keras.models import load_model
 from keras.preprocessing.image import img_to_array
 from datetime import datetime
 from collections import Counter, defaultdict
-import pyttsx3
 
-# Detect cloud environment (mic input disabled)
+# Optional TTS (safe for local use only)
+try:
+    import pyttsx3
+    tts_engine = pyttsx3.init()
+except:
+    tts_engine = None
+
+# Detect cloud environment (mic/webcam not supported)
 IS_CLOUD = os.environ.get("STREAMLIT_SERVER_HEADLESS") == "1"
 
 # Load models
@@ -28,14 +34,14 @@ try:
 except:
     songs_df = pd.DataFrame(columns=["song_name", "artist_name", "spotify_track_link", "thumbnail_link", "Sad Ballad", "Happy", "Party Anthem", "Motivational", "Romantic Ballad"])
 
-# Initialize log file
+# Load or initialize prediction log
 CSV_FILE = "results.csv"
 try:
     log_df = pd.read_csv(CSV_FILE)
 except:
     log_df = pd.DataFrame(columns=["Timestamp", "Face", "Audio", "Final"])
 
-# Emotion to genre map
+# Emotion to genre mapping
 emotion_genre_map = {
     "happy": ["Happy", "Party Anthem", "Motivational"],
     "sad": ["Sad Ballad"],
@@ -46,21 +52,26 @@ emotion_genre_map = {
     "disgust": ["Lyrical Rap"]
 }
 
-# Track songs shown per emotion
+# Session state to avoid repeating songs
 if "shown_songs" not in st.session_state:
     st.session_state.shown_songs = defaultdict(set)
 
-# TTS function
+# TTS function (only works locally)
 def speak(text):
-    try:
-        engine = pyttsx3.init()
-        engine.say(text)
-        engine.runAndWait()
-    except:
-        st.warning("🗣️ TTS failed to play.")
+    if tts_engine:
+        try:
+            tts_engine.say(text)
+            tts_engine.runAndWait()
+        except:
+            st.warning("🗣️ TTS playback failed.")
+    else:
+        st.info("🔇 TTS not available in cloud environment.")
 
-# Predict face emotion using webcam
+# Face emotion prediction
 def predict_face_emotion():
+    if IS_CLOUD:
+        return random.choice(face_labels), None
+
     cam = cv2.VideoCapture(0)
     frame = None
     for _ in range(10):
@@ -89,21 +100,20 @@ def predict_face_emotion():
     pred = face_model.predict(roi)[0]
     return face_labels[np.argmax(pred)], frame
 
-# Simulated audio emotion (Streamlit Cloud compatible)
+# Audio emotion prediction (simulated in cloud)
 def predict_audio_emotion():
     if IS_CLOUD:
         return random.choice(audio_labels)
-    else:
-        try:
-            import sounddevice as sd
-            audio = sd.rec(int(3 * 22050), samplerate=22050, channels=1)
-            sd.wait()
-            mfcc = librosa.feature.mfcc(y=audio.flatten(), sr=22050, n_mfcc=40)
-            mfcc_scaled = np.mean(mfcc.T, axis=0)
-            pred = audio_model.predict(np.expand_dims(mfcc_scaled, axis=0))[0]
-            return audio_labels[np.argmax(pred)]
-        except:
-            return random.choice(audio_labels)
+    try:
+        import sounddevice as sd
+        audio = sd.rec(int(3 * 22050), samplerate=22050, channels=1)
+        sd.wait()
+        mfcc = librosa.feature.mfcc(y=audio.flatten(), sr=22050, n_mfcc=40)
+        mfcc_scaled = np.mean(mfcc.T, axis=0)
+        pred = audio_model.predict(np.expand_dims(mfcc_scaled, axis=0))[0]
+        return audio_labels[np.argmax(pred)]
+    except:
+        return random.choice(audio_labels)
 
 # Streamlit UI
 st.set_page_config(page_title="Emotion Detector", layout="centered")
@@ -111,7 +121,7 @@ st.title("🎭 Real-Time Emotion Detector")
 st.caption("Face + Audio Emotion Recognition with Music Recommendation")
 
 if IS_CLOUD:
-    st.warning("🎙️ Mic input is disabled on Streamlit Cloud. Using demo mode.")
+    st.warning("⚠️ Mic and Webcam access are disabled in Render/Streamlit Cloud.\nRunning in demo mode using random emotions.")
 
 if st.button("▶ Start Emotion Detection"):
     with st.spinner("Analyzing face..."):
@@ -131,11 +141,11 @@ if st.button("▶ Start Emotion Detection"):
     final_emotion = final[0][0] if final else "Unknown"
     st.markdown(f"### 🎯 Final Detected Emotion: `{final_emotion}`")
 
-    # Save to log
+    # Save to CSV log
     log_df.loc[len(log_df)] = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), face_emotion or "None", audio_emotion or "None", final_emotion]
     log_df.to_csv(CSV_FILE, index=False)
 
-    # Song Suggestion
+    # Suggest song
     st.subheader("🎶 Suggested Bollywood Song")
     genres = emotion_genre_map.get(final_emotion.lower(), [])
     filtered = songs_df.copy()
